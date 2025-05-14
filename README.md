@@ -15,6 +15,8 @@
 - 객체 인식 정보 실시간 표시 (유형, 수량, 신뢰도)
 - 사용자 친화적인 GUI 인터페이스
 
+<img src="https://github.com/gomtam/image/blob/main/250514/KakaoTalk_20250514_164538559.png" width="400">
+
 ## 개발 환경 및 필요 사항
 
 - Python 3.8 이상
