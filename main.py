@@ -30,6 +30,8 @@ class HumanoidControlApp(QMainWindow):
         self.last_person_disappear_time = 0  # 마지막으로 사람이 사라진 시간
         self.person_absence_threshold = 5  # 사람이 사라진 후 다시 인식되면 인사할 시간 간격(초)
         self.confidence_threshold = 0.5  # 객체 인식 신뢰도 임계값 (0.5 = 50%)
+        self.robot_standing = True  # 로봇이 서 있는지 여부 (기본값: 서있음)
+        self.motion_in_progress = False  # 현재 모션이 진행 중인지 여부
         
         # YOLO 모델 설정
         self.model = None
@@ -59,6 +61,9 @@ class HumanoidControlApp(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)  # 30ms 간격 (약 33fps)
+        
+        # 시작 시 차렷 자세 명령 실행 (1초 후)
+        QTimer.singleShot(1000, lambda: self.exeHumanoidMotion(1))
     
     def setup_ui(self):
         # 중앙 위젯 설정
@@ -129,7 +134,12 @@ class HumanoidControlApp(QMainWindow):
         
         for text, motion_id in motion_buttons:
             button = QPushButton(text)
-            button.clicked.connect(lambda checked, id=motion_id: self.exeHumanoidMotion(id))
+            if motion_id == 115:  # 앉기 버튼
+                button.clicked.connect(lambda checked, id=motion_id: self.sit_down())
+            elif motion_id == 116:  # 일어서기 버튼
+                button.clicked.connect(lambda checked, id=motion_id: self.stand_up())
+            else:
+                button.clicked.connect(lambda checked, id=motion_id: self.exeHumanoidMotion(id))
             motion_layout.addWidget(button)
         
         left_layout.addLayout(motion_layout)
@@ -299,13 +309,12 @@ class HumanoidControlApp(QMainWindow):
                 self.is_person_detected = True
                 self.status_label.setText("상태: 사람 감지됨")
                 
-                # 사람이 사라진 후 지정된 시간(예: 5초) 이상 지났으면 인사
+                # 사람이 사라진 후 지정된 시간(예: 5초) 이상 지났으면 인사 시퀀스 실행
                 time_since_disappear = current_time - self.last_person_disappear_time
                 if (self.last_person_disappear_time == 0 or 
                     time_since_disappear > self.person_absence_threshold) and self.motion_ready:
-                    self.exeHumanoidMotion(19)  # 인사 모션 ID 19
                     self.last_greeting_time = current_time
-                    self.greeting_info.setText(f"마지막 인사: {time.strftime('%H:%M:%S')}")
+                    self.perform_greeting_sequence()  # 수정된 부분: 인사 시퀀스 함수 호출
         else:
             # 사람이 감지되지 않는 경우
             if self.is_person_detected:
@@ -313,6 +322,10 @@ class HumanoidControlApp(QMainWindow):
                 self.is_person_detected = False
                 self.last_person_disappear_time = current_time
                 self.status_label.setText("상태: 대기 중")
+                
+                # 사람이 사라지면 1.5초 후에 앉기 (옵션)
+                if self.robot_standing and not self.motion_in_progress:
+                    QTimer.singleShot(1500, self.sit_down)
         
         # 사람 부재 시간 계산 및 표시
         if not self.is_person_detected and self.last_person_disappear_time > 0:
@@ -365,6 +378,9 @@ class HumanoidControlApp(QMainWindow):
             self.auto_detect_port()
             return
 
+        # 모션 시작 표시
+        self.motion_in_progress = True
+        
         # 모션 제어 기본 패킷 생성
         packet_buff = [0xff, 0xff, 0x4c, 0x53,  # 헤더
                        0x00, 0x00, 0x00, 0x00,  # Destination ADD, Source ADD
@@ -382,6 +398,7 @@ class HumanoidControlApp(QMainWindow):
         for i in range(len(packet_buff)):
             if not (0 <= packet_buff[i] <= 255):
                 QMessageBox.warning(self, "패킷 오류", f"패킷의 {i}번째 값 {packet_buff[i]}이(가) 바이트 범위를 벗어났습니다.")
+                self.motion_in_progress = False  # 모션 종료 표시
                 return
 
         # 시리얼 포트 열기
@@ -398,6 +415,12 @@ class HumanoidControlApp(QMainWindow):
                 # 패킷 전송
                 ser.write(byte_packet)
                 self.status_label.setText(f"상태: 모션 실행 중 (ID: {motion_id})")
+                
+                # 모션 완료를 처리하기 위한 타이머 설정 (모션 ID에 따라 다른 시간 설정)
+                if motion_id == 115 or motion_id == 116:  # 앉기/일어서기는 시간이 더 필요
+                    QTimer.singleShot(1500, self._motion_completed)
+                else:
+                    QTimer.singleShot(1000, self._motion_completed)
             else:
                 raise serial.SerialException(f"시리얼 포트 {port_name}를 열 수 없습니다.")
                 
@@ -406,18 +429,70 @@ class HumanoidControlApp(QMainWindow):
             QMessageBox.warning(self, "시리얼 포트 오류", str(e))
             # 포트 재감지 시도
             self.auto_detect_port()
+            self.motion_in_progress = False  # 모션 종료 표시
         except ValueError as e:
             # 바이트 변환 오류 처리
             QMessageBox.warning(self, "패킷 오류", f"패킷 변환 중 오류 발생: {str(e)}")
+            self.motion_in_progress = False  # 모션 종료 표시
         finally:
             if 'ser' in locals() and ser.is_open:
                 ser.close()
     
+    def _motion_completed(self):
+        """모션 완료 처리"""
+        self.motion_in_progress = False
+        self.status_label.setText("상태: 준비됨")
+
     def closeEvent(self, event):
         # 종료 시 자원 해제
         if self.cap.isOpened():
             self.cap.release()
         event.accept()
+
+    def sit_down(self):
+        """로봇 앉기 동작 수행"""
+        if self.motion_in_progress:
+            return
+            
+        self.exeHumanoidMotion(115)  # 앉기 모션 ID 115
+        self.robot_standing = False
+        
+    def stand_up(self):
+        """로봇 일어서기 동작 수행"""
+        if self.motion_in_progress:
+            return
+            
+        self.exeHumanoidMotion(116)  # 일어서기 모션 ID 116
+        self.robot_standing = True
+        
+    def perform_greeting_sequence(self):
+        """인사 시퀀스 수행 (필요시 일어난 후 인사)"""
+        if self.motion_in_progress:
+            return
+            
+        self.motion_in_progress = True
+        
+        # 로봇이 앉아있는 상태면 먼저 일어나기
+        if not self.robot_standing:
+            # 일어나기 위한 타이머 설정
+            QTimer.singleShot(500, self._stand_and_greet)
+        else:
+            # 이미 서 있으면 바로 인사
+            QTimer.singleShot(500, self._just_greet)
+    
+    def _stand_and_greet(self):
+        """일어난 후 인사하는 시퀀스"""
+        self.exeHumanoidMotion(116)  # 일어서기
+        self.robot_standing = True
+        
+        # 일어선 후 5초 후에 인사
+        QTimer.singleShot(5000, self._just_greet)
+    
+    def _just_greet(self):
+        """인사만 하는 함수"""
+        self.exeHumanoidMotion(19)  # 인사 모션 ID 19
+        self.greeting_info.setText(f"마지막 인사: {time.strftime('%H:%M:%S')}")
+        self.motion_in_progress = False
 
 if __name__ == "__main__":
     # PyQt 애플리케이션 초기화
