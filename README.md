@@ -2,6 +2,18 @@
 
 이 프로젝트는 카메라로 사람을 인식하고, 사람이 감지되면 로봇이 자동으로 인사하는 프로그램입니다. YOLOv5n 객체 인식 모델을 사용하여 사람뿐만 아니라 다양한 객체를 인식할 수 있습니다.
 
+## 데모 영상
+
+### 방법 1: 직접 링크
+![로봇 데모 영상](https://github.com/gomtam/image/blob/main/video/robot.mp4)
+
+### 방법 2: HTML 비디오 태그 (GitHub에서 지원되는 경우)
+<video src="https://github.com/gomtam/image/blob/main/video/robot.mp4" controls="controls" style="max-width: 730px;">
+</video>
+
+### 방법 3: 링크 방식
+[로봇 데모 영상 보기](https://github.com/gomtam/image/blob/main/video/robot.mp4)
+
 ## 주요 기능
 
 - YOLOv5n 모델을 사용한 실시간 객체 인식 (50% 이상 신뢰도)
