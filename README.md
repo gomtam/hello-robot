@@ -31,8 +31,8 @@
 
 1. 저장소 복제:
 ```
-git clone https://github.com/your-username/human-detection-robot.git
-cd human-detection-robot
+git clone https://github.com/gomtam/hello-robot.git
+cd hello-robot
 ```
 
 2. 필요한 패키지 설치:
