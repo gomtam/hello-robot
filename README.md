@@ -61,6 +61,9 @@ mkdir -p models
 ```
 python main.py
 ```
+### 프로그램 시연 영상<br>
+![시연 영상](https://github.com/gomtam/image/blob/main/250514/robot_demo.gif)
+
 
 ## 사용 방법
 
